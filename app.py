@@ -8,8 +8,8 @@ from flask_cors import CORS
 app = Flask(__name__)
 
 # ====== CORS SETUP ======
-frontend_origin = os.getenv("FRONTEND_URL", "http://localhost:3000")
-CORS(app, origins=[frontend_origin])
+# Allow all origins temporarily for local testing
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # ====== MODEL CONSTANTS ======
 TARGET_SR = 22050
