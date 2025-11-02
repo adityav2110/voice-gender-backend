@@ -6,9 +6,12 @@ import os
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
 
-# ====== MODEL CONSTANTS (from your Colab) ======
+# ====== CORS SETUP ======
+frontend_origin = os.getenv("FRONTEND_URL", "http://localhost:3000")
+CORS(app, origins=[frontend_origin])
+
+# ====== MODEL CONSTANTS ======
 TARGET_SR = 22050
 DURATION = 4
 N_MFCC = 40
@@ -17,31 +20,26 @@ N_FRAMES = 173
 FIXED_LENGTH = int(DURATION * TARGET_SR)
 INPUT_SHAPE = (1, N_MFCC, N_FRAMES, 1)
 
-# ====== LOAD TRAINED MODEL ======
+# ====== LOAD MODEL ======
 model = tf.keras.models.load_model("model.keras")
 
-# ====== PREPROCESSING FUNCTION (IDENTICAL TO COLAB) ======
+# ====== PREPROCESSING FUNCTION ======
 def preprocess_audio(file_path):
     try:
         y, sr = librosa.load(file_path, sr=None)
         if sr != TARGET_SR:
             y = librosa.resample(y, orig_sr=sr, target_sr=TARGET_SR)
-
         y, _ = librosa.effects.trim(y, top_db=20)
-
         if len(y) > FIXED_LENGTH:
             start = (len(y) - FIXED_LENGTH) // 2
             y = y[start : start + FIXED_LENGTH]
         elif len(y) < FIXED_LENGTH:
             y = np.pad(y, (0, FIXED_LENGTH - len(y)), 'constant')
-
         mfcc = librosa.feature.mfcc(
             y=y, sr=TARGET_SR, n_mfcc=N_MFCC, n_fft=2048, hop_length=HOP_LENGTH
         )
-
         if mfcc.shape != (N_MFCC, N_FRAMES):
             mfcc = librosa.util.fix_length(mfcc, size=N_FRAMES, axis=1)
-
         mfcc = mfcc.reshape(1, N_MFCC, N_FRAMES, 1)
         return mfcc
     except Exception as e:
@@ -67,14 +65,12 @@ def predict():
         mfcc = preprocess_audio(file_path)
         prediction = model.predict(mfcc)
         probability = float(prediction[0][0])
-
         if probability > 0.5:
             label = "Male"
             confidence = probability * 100
         else:
             label = "Female"
             confidence = (1 - probability) * 100
-
         return jsonify({
             'prediction': label,
             'confidence': round(confidence, 2)
