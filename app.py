@@ -20,8 +20,26 @@ N_FRAMES = 173
 FIXED_LENGTH = int(DURATION * TARGET_SR)
 INPUT_SHAPE = (1, N_MFCC, N_FRAMES, 1)
 
-# ====== LOAD MODEL ======
-model = tf.keras.models.load_model("model.keras")
+# ====== MODEL PATHS ======
+keras_model_path = "model.keras"
+tflite_model_path = "model.tflite"
+
+# ====== AUTO-CONVERT KERAS → TFLITE ======
+if not os.path.exists(tflite_model_path) and os.path.exists(keras_model_path):
+    print("🔄 Converting model.keras → model.tflite ...")
+    model = tf.keras.models.load_model(keras_model_path)
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    tflite_model = converter.convert()
+    with open(tflite_model_path, "wb") as f:
+        f.write(tflite_model)
+    print("✅ Conversion complete: model.tflite created!")
+
+# ====== LOAD TFLITE MODEL ======
+interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
+interpreter.allocate_tensors()
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
 # ====== PREPROCESSING FUNCTION ======
 def preprocess_audio(file_path):
@@ -40,7 +58,7 @@ def preprocess_audio(file_path):
         )
         if mfcc.shape != (N_MFCC, N_FRAMES):
             mfcc = librosa.util.fix_length(mfcc, size=N_FRAMES, axis=1)
-        mfcc = mfcc.reshape(1, N_MFCC, N_FRAMES, 1)
+        mfcc = mfcc.reshape(1, N_MFCC, N_FRAMES, 1).astype(np.float32)
         return mfcc
     except Exception as e:
         raise ValueError(f"Error in preprocessing: {e}")
@@ -63,7 +81,9 @@ def predict():
 
     try:
         mfcc = preprocess_audio(file_path)
-        prediction = model.predict(mfcc)
+        interpreter.set_tensor(input_details[0]['index'], mfcc)
+        interpreter.invoke()
+        prediction = interpreter.get_tensor(output_details[0]['index'])
         probability = float(prediction[0][0])
         if probability > 0.5:
             label = "Male"

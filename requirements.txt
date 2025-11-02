@@ -1,6 +1,6 @@
 Flask
-Flask-Cors
-tensorflow
-librosa
+tensorflow-cpu
 numpy
-soundfile
+librosa
+flask-cors
+gunicorn
